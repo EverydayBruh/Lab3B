@@ -15,6 +15,8 @@ int FilenameIsValid(char* name);
 
 void printArray(int* arr, int n);
 void printArrayFloat(float* arr, int n);
+void printText(char* text);
+void printInteger(int a);
 
 
 #endif

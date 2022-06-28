@@ -188,3 +188,10 @@ void printArrayFloat(float* arr, int n)
             };
 }
 
+void printText(char* text){
+    printf("%s ", text);
+}
+void printInteger(int a){
+    printf("%d ", a);
+}
+

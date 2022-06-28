@@ -3,33 +3,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include "structs.h"
+#include "InOut.h"
 
 
-void clearTable2(Table2* table){
-    for(int i = 0; i < table->size; i++){
-        table->arr->busy = 0;
-    }
+IndexType2 hash(Table2 table, KeyType2 key, int i){
+    return (key+i) % table.size;
 }
 
-void copyElement2(KeySpace2* source, KeySpace2* dest){
-    dest->busy = source->busy;
-    dest->key = source->key;
-    dest->release = source->release;
-    // printf("Info copy");
-    dest->info = malloc(sizeof(InfoType));
-    copyInfo(source->info, dest->info);
-}
-
-Table2* newTable(int size){
-    Table2* table = malloc(sizeof(Table2));
-    table->size = size;
-    table->arr = calloc(size, sizeof(KeySpace2));
-    clearTable2(table);
-    return table;
-}
-
-void printInfo(InfoType* info){
-    printf("%s ", info->text);
+void printInfo(InfoType info, FILE* fb){
+    char* text = calloc(info.length+1, sizeof(char));
+    // printInteger(info.text);
+    fseek(fb, info.text, SEEK_SET);
+    fread(text, sizeof(char), info.length+1, fb);
+    // puts(text);
+    
+    // printf("%c ", text[999]);
+    printf("%s ", text);
+    free(text);
 }
 
 void printKey(KeyType2 key){
@@ -40,119 +30,156 @@ void printVersion(RelType2 release){
     printf("%d ", release);
 }
 
+void printElement2(KeySpace2 element, FILE* fb){
+    printf("Busy: ");
+    printf("%d ", element.busy);
+    if(element.busy == 1){
+        printf("Info: ");
+        printInfo(element.info, fb);
+        printf("Key: %d ", element.key);
+        printf("Version: ");
+        printVersion(element.release);
+    }
+    printf("\n");
+}
 
-void printElement2(KeySpace2* element){
-    printf("%d ", element->busy);
-    if(element->busy == 1){
-        printInfo(element->info);
-        printKey(element->key);
-        printVersion(element->release);
+int writeElement(int pos, KeySpace2 element, FILE* fb){
+    fseek(fb, pos, SEEK_SET);
+    fwrite(&element, sizeof(element), 1, fb);
+    return pos;
+}
+
+int writeElementByIndex(KeySpace2 element, Table2 table, int index, FILE* fb){
+    int pos = ftell(fb);
+    if(index >= table.size){
+        printf("Too big index\n");
+    }
+    writeElement(table.arr + index*sizeof(KeySpace2), element, fb);
+      
+    return pos;
+}
+
+KeySpace2 readElement(int pos, FILE* fb){
+    KeySpace2 element;
+    fseek(fb, pos, SEEK_SET);
+    fread(&element, sizeof(KeySpace2), 1, fb);
+    // printf("Read element:");
+    // printElement2(element, fb);
+    return element;
+}
+
+address writeText(char* text, FILE* fb){
+    // puts(text);
+    address cur = ftell(fb);
+    fseek(fb, 0, SEEK_END);
+    address pos = ftell(fb);
+    fwrite(text, sizeof(char), strlen(text)+1, fb);
+    fseek(fb, cur, SEEK_SET);
+    //  puts(text);
+    // printInteger(cur);
+    // printInteger(pos);
+    return pos;
+}
+
+InfoType createInfoFromText(char* text, FILE* fb){
+    InfoType info;
+    info.length = strlen(text);
+    info.text = writeText(text, fb);
+    // printInteger(3);
+    // puts(text);
+    // printInfo(info, fb);
+    return info;
+}
+
+
+address newTable(int size, FILE* fb){
+    int pos = ftell(fb);
+    Table2 table;
+    table.size = size;
+    KeySpace2 element;
+    element.busy = 0;
+    table.arr = ftell(fb) + sizeof(Table2);   
+    int cur = table.arr;
+    fwrite(&table, sizeof(Table2), 1, fb);
+    for(int i = 0; i < size; i++){
+        writeElement(cur, element, fb);
+        cur += sizeof(KeySpace2);
+    }
+    printElement2(element, fb);
+    return pos;
+}
+
+Table2 readTable(int pos, FILE* fb){
+    Table2 table;
+    fseek(fb, pos, SEEK_SET);
+    fread(&table, sizeof(table), 1, fb);
+    return table;
+}
+
+
+
+
+
+
+KeySpace2 getElementByIndex(Table2 table, int index, FILE* fb){
+    if(index >= table.size){
+        printf("Too big index\n");
+    }
+    KeySpace2 element = readElement(table.arr + index*sizeof(KeySpace2), fb);
+    // printf("Get element by Index:");
+    // printElement2(element, fb);
+    return element;
+}
+
+void printTable2(Table2 table, FILE* fb){
+    address pos = table.arr;
+    KeySpace2 element;
+    for(int i = 0; i < table.size; i++){
+        element = getElementByIndex(table, i, fb);
+        printElement2(element, fb);
     }
 }
 
-void printTable2(Table2* table){
-    for(int i = 0; i < table->size; i++){
-        printElement2(&(table->arr[i]));
-        printf("\n");
-    }
-}
-
-IndexType2 hash(Table2 *table, KeyType2 key, int i){
-    return (key+i) % table->size;
-}
-
-int addElement2(Table2 *table, KeyType2 key, InfoType* info){
-    IndexType2 index;
-    KeySpace2* arr = table->arr;
+int addElement2(Table2 table, KeyType2 key, InfoType info, FILE* fb){
+    address arr = table.arr;
+    int index;
     RelType2 rel = 0;
+    KeySpace2 element;
 
-    for(int i = 0; i < table->size; i++){
+    for(int i = 0; i < table.size; i++){
         index = hash(table, key, i);
-        if(arr[index].busy == 0){
-            arr[index].busy = 1;
-            arr[index].key = key;
-            arr[index].info = info;
-            arr[index].release = rel;
+        element = getElementByIndex(table, index, fb);
+        if(element.busy == 0){
+            element.busy = 1;
+            element.key = key;
+            element.info = info;
+            element.release = rel;
+            //fseek(fb, )
+            writeElementByIndex(element, table, index, fb);
+            // printElement2(element, fb);
+            printf("Index: %d\n", index);
+            printElement2(getElementByIndex(table, index, fb), fb);
+            // printf("Key: %d", element.key);
+            
             printf("Succes!\n");
             return 0;
-        } else if (arr[index].key == key){
-            rel = arr[index].release + 1;
+        } else if (element.key == key){
+            rel = element.release + 1;
         }
     }
     return -1;
 }
 
-Table2* getItemByVer2(Table2 *table, KeyType2 key, RelType2 release){
-    //FIND BY KEY ONLY -> release = -1
-    // printf("getItems2 Start\n");
-
-    IndexType2 index;
-    Table2* newTable = malloc(sizeof(Table2));
-    newTable->size = 0;
-    KeySpace2* arr = table->arr;
-    int i = 0;
-
-    for(i = 0; i < table->size; i++){
-        index = hash(table, key, i);
-        if(arr[index].busy == 1){
-            if(arr[index].key == key && (release == -1 || release == arr[index].release)){
-                newTable->size++;
-                if(newTable->size==1){
-                    newTable->arr = malloc(sizeof(KeySpace2));
-                } else {
-                    newTable->arr = realloc(newTable->arr, newTable->size * sizeof(KeySpace2));
-                }
-                copyElement2( &(arr[index]), &(newTable->arr[newTable->size-1]) );
-                
-            }
-        } 
-    }
-    return newTable;
-}
-
-int freeElement2(KeySpace2* element){
-    if(element == NULL){return 1;}
-    if(element->busy == 0){return 0;}
-    if(element->info!=NULL){
-        clearInfo(element->info);
-        
-    }
-    element->busy = 0;
-    clearKey(&(element->key));
-    return 0;
-}
-
-void delByKey2(Table2 *table, KeyType2 key){
-    KeySpace2* arr = table->arr;
-    int i = 0;
+void delByKey(Table2 table, KeyType2 key, FILE* fb){
     int index;
-
-    for(i = 0; i < table->size; i++){
+    KeySpace2 element;
+    for(int i = 0; i < table.size; i++){
         index = hash(table, key, i);
-        if(arr[index].busy == 1){
-            if(arr[index].key == key){
-               freeElement2(&(arr[index]));
-            }
-        } 
+        element = getElementByIndex(table, index, fb);
+        if(element.busy == 1 && element.key == key){
+            element.busy = 0;
+            writeElementByIndex(element, table, index, fb);
+            printf("Deleted!\n");
+        }
     }
-    
-}
-
-int delTable2(Table2* table){
-    if(table == NULL){
-        return 1;
-    }
-    KeySpace2* arr = table->arr;
-    for(int i = 0; i<table->size; i++){
-        freeElement2(&(arr[i]));
-    }
-    free(arr);
-    free(table);
-    return 0;
-}
-
-Table2* getItems2(Table2 *table, KeyType2 key){
-    Table2* newTable =  getItemByVer2(table, key, -1);
-    return newTable;
-    
 }
