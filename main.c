@@ -10,6 +10,7 @@ InfoType readInfo(FILE* fb){
     char* text = read_line();
     InfoType info;
     info = createInfoFromText(text, fb);
+    free(text);
     return info;
 }
 
@@ -20,11 +21,10 @@ int addElement(Table2 table, FILE* fb){
     KeyType2 key;
     readint(&key);
     if(addElement2(table, key, info, fb) == 0){
-        return 0;
     } else {
         printf("Array is full! \n");
-        return -1;
     }
+    return 0;
 }
 
 
@@ -105,8 +105,6 @@ int main(){
         }
     }
     
-    //addElement(table, fb);
-    delByKey(table, 1, fb);
-    printTable2(table, fb);
+    fclose(fb);
     return 0;
 }
